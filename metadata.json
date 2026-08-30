@@ -1,6 +1,6 @@
 {
-  "name": "Shivjyot Mandal Pustak",
-  "description": "A web app designed specifically for Ganeshotsav festival committees and Sarvajanik Mandals.",
+  "name": "शिवज्योत गणेशोत्सव मंडळ",
+  "description": "सार्वजनिक गणेशोत्सव २०२६ (वर्ष २८) पावती, देणगी आणि खर्च व्यवस्थापन ॲप",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -19,6 +19,11 @@ export const deleteVargani = (id: string) => {
   localStorage.setItem(VARGANI_KEY, JSON.stringify(data));
 };
 
+export const updateVargani = (updated: Vargani) => {
+  const data = getVarganis().map(v => v.id === updated.id ? updated : v);
+  localStorage.setItem(VARGANI_KEY, JSON.stringify(data));
+};
+
 export const getExpenses = (): Expense[] => {
   const data = localStorage.getItem(EXPENSE_KEY);
   return data ? JSON.parse(data) : [];
@@ -27,6 +32,11 @@ export const getExpenses = (): Expense[] => {
 export const saveExpense = (e: Expense) => {
   const data = getExpenses();
   data.push(e);
+  localStorage.setItem(EXPENSE_KEY, JSON.stringify(data));
+};
+
+export const updateExpense = (updated: Expense) => {
+  const data = getExpenses().map(e => e.id === updated.id ? updated : e);
   localStorage.setItem(EXPENSE_KEY, JSON.stringify(data));
 };
 

@@ -18,7 +18,10 @@ export interface Expense {
   date: string;
   title: string;
   category: string;
-  amount: number;
+  amount: number; // actual amount paid/spent (advance)
+  advanceAmount?: number;
+  remainingAmount?: number;
+  totalAmount?: number;
   notes: string;
   file?: string;
 }

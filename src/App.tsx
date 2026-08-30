@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, MinusCircle, Download, Share2, ArrowLeft, Home, List, PieChart, Trash2, X, Check, Globe } from 'lucide-react';
-import { getVarganis, getExpenses, saveVargani, saveExpense, deleteVargani, deleteExpense, getNextReceiptNo, formatCurrency, numberToEnglishWords, numberToMarathiWords, toMarathiDigits } from './store';
+import { PlusCircle, MinusCircle, Download, Share2, ArrowLeft, Home, List, PieChart, Trash2, X, Check, Globe, AlertCircle, CheckCircle, CreditCard } from 'lucide-react';
+import { getVarganis, getExpenses, saveVargani, saveExpense, updateVargani, updateExpense, deleteVargani, deleteExpense, getNextReceiptNo, formatCurrency, numberToEnglishWords, numberToMarathiWords, toMarathiDigits } from './store';
 import { Vargani, Expense } from './types';
 import { format } from 'date-fns';
 import { toBlob, toPng } from 'html-to-image';
@@ -24,7 +24,7 @@ const translations = {
   noEntries: { en: 'No entries found.', mr: 'कोणतीही नोंद नाही.' },
   netBalance: { en: 'Net Balance', mr: 'एकूण शिल्लक' },
   totalCollected: { en: 'Total Collected', mr: 'एकूण जमा' },
-  totalSpent: { en: 'Total Spent', mr: 'एकूण खर्च' },
+  totalSpent: { en: 'Total Spent (Paid)', mr: 'एकूण खर्च (दिलेला)' },
   leaderboard: { en: 'Volunteer Leaderboard', mr: 'स्वयंसेवक यादी' },
   noData: { en: 'No data yet', mr: 'कोणताही डेटा नाही' },
   newVargani: { en: 'New Vargani Receipt', mr: 'नवीन वर्गणी पावती' },
@@ -41,14 +41,24 @@ const translations = {
   volunteerName: { en: 'Volunteer Name *', mr: 'स्वयंसेवकाचे नाव *' },
   cancel: { en: 'Cancel', mr: 'रद्द करा' },
   generateReceipt: { en: 'Generate Receipt', mr: 'पावती तयार करा' },
-  newExpense: { en: 'New Expense', mr: 'नवीन खर्च' },
-  expenseTitle: { en: 'Expense Title *', mr: 'खर्चाचे नाव *' },
+  newExpense: { en: 'New Expense', mr: 'नवीन खर्च नोंद' },
+  expenseTitle: { en: 'Expense / Vendor Title *', mr: 'खर्चाचे नाव / कंत्राटदार *' },
   category: { en: 'Category', mr: 'वर्ग' },
-  notes: { en: 'Notes', mr: 'नोंदी' },
-  saveExpense: { en: 'Add Expense', mr: 'खर्च जोडा' },
+  advanceAmount: { en: 'Advance / Paid Amount *', mr: 'दिलेली आगाऊ रक्कम *' },
+  remainingAmount: { en: 'Remaining / Pending Amount', mr: 'बाकी / प्रलंबित रक्कम' },
+  totalBillAmount: { en: 'Total Estimated / Bill Amount', mr: 'एकूण खर्चाची रक्कम' },
+  notes: { en: 'Notes / Contact Info', mr: 'नोंदी / संपर्क तपशील' },
+  saveExpense: { en: 'Save Expense', mr: 'खर्च जतन करा' },
   deleteTitle: { en: 'Delete Entry', mr: 'नोंद हटवा' },
   deleteConfirm: { en: 'Are you sure? This will be permanently deleted and cannot be undone.', mr: 'तुम्हाला खात्री आहे का? हा डेटा कायमचा हटवला जाईल.' },
   yesDelete: { en: 'Yes, Delete', mr: 'होय, हटवा' },
+  pendingPayable: { en: 'Pending to Pay', mr: 'देणे बाकी' },
+  pendingReceivable: { en: 'Pending to Receive', mr: 'येणे बाकी' },
+  totalCommitted: { en: 'Total Budgeted Expense', mr: 'एकूण अंदाजित खर्च' },
+  settleDue: { en: 'Pay Remaining', mr: 'बाकी भरा' },
+  markReceived: { en: 'Mark Received', mr: 'जमा झाली' },
+  paid: { en: 'Paid', mr: 'दिले' },
+  remaining: { en: 'Remaining', mr: 'बाकी' },
 };
 
 const t = (key: keyof typeof translations, lang: Lang) => translations[key][lang];
@@ -62,6 +72,10 @@ export default function App() {
   
   // Custom Delete Modal State
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'vargani' | 'expense', id: string } | null>(null);
+
+  // Settlement Modal State for Pending Expense
+  const [settleExpenseItem, setSettleExpenseItem] = useState<Expense | null>(null);
+  const [settleAmount, setSettleAmount] = useState<string>('');
 
   useEffect(() => {
     setVarganis(getVarganis());
@@ -80,6 +94,45 @@ export default function App() {
       setExpenses(getExpenses());
     }
     setDeleteConfirm(null);
+  };
+
+  const handleMarkVarganiReceived = (id: string) => {
+    const v = varganis.find(item => item.id === id);
+    if (!v) return;
+    const updated = { ...v, isPending: false };
+    updateVargani(updated);
+    setVarganis(getVarganis());
+  };
+
+  const handleOpenSettleExpense = (exp: Expense) => {
+    setSettleExpenseItem(exp);
+    setSettleAmount((exp.remainingAmount || 0).toString());
+  };
+
+  const handleConfirmSettleExpense = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!settleExpenseItem) return;
+    const pay = Number(settleAmount);
+    if (isNaN(pay) || pay <= 0) return;
+
+    const currentAdvance = settleExpenseItem.advanceAmount ?? settleExpenseItem.amount;
+    const currentRemaining = settleExpenseItem.remainingAmount ?? 0;
+    const newAdvance = currentAdvance + pay;
+    const newRemaining = Math.max(0, currentRemaining - pay);
+    const newTotal = settleExpenseItem.totalAmount || (currentAdvance + currentRemaining);
+
+    const updated: Expense = {
+      ...settleExpenseItem,
+      amount: newAdvance,
+      advanceAmount: newAdvance,
+      remainingAmount: newRemaining,
+      totalAmount: newTotal
+    };
+
+    updateExpense(updated);
+    setExpenses(getExpenses());
+    setSettleExpenseItem(null);
+    setSettleAmount('');
   };
 
   return (
@@ -113,7 +166,17 @@ export default function App() {
       <main className="flex-1 overflow-hidden flex flex-col relative w-full max-w-md mx-auto bg-white shadow-xl border-x border-gray-100">
         <div className="flex-1 overflow-y-auto relative">
           {currentView === 'home' && <HomeView navigateTo={navigateTo} lang={lang} />}
-          {currentView === 'entries' && <EntriesView varganis={varganis} expenses={expenses} onDelete={(type, id) => setDeleteConfirm({ type, id })} onViewReceipt={(v) => { setSelectedReceipt(v); navigateTo('receipt'); }} lang={lang} />}
+          {currentView === 'entries' && (
+            <EntriesView 
+              varganis={varganis} 
+              expenses={expenses} 
+              onDelete={(type, id) => setDeleteConfirm({ type, id })} 
+              onViewReceipt={(v) => { setSelectedReceipt(v); navigateTo('receipt'); }} 
+              onMarkVarganiReceived={handleMarkVarganiReceived}
+              onOpenSettleExpense={handleOpenSettleExpense}
+              lang={lang} 
+            />
+          )}
           {currentView === 'reports' && <ReportsView varganis={varganis} expenses={expenses} lang={lang} />}
           {currentView === 'vargani_form' && (
             <VarganiForm 
@@ -124,7 +187,7 @@ export default function App() {
           )}
           {currentView === 'expense_form' && (
             <ExpenseForm 
-              onSave={(e) => { saveExpense(e); setExpenses(getExpenses()); navigateTo('home'); }}
+              onSave={(e) => { saveExpense(e); setExpenses(getExpenses()); navigateTo('entries'); }}
               onCancel={() => navigateTo('home')}
               lang={lang}
             />
@@ -153,6 +216,77 @@ export default function App() {
         )}
       </main>
       
+      {/* Settle Expense Due Modal */}
+      {settleExpenseItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
+          <div className="bg-white rounded-xl shadow-2xl p-5 w-full max-w-sm border-t-4 border-[#800000]">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-base font-bold text-[#800000] flex items-center gap-1.5">
+                <CreditCard size={18} />
+                {lang === 'mr' ? 'बाकी खर्चाचे पेमेंट करा' : 'Settle Expense Due'}
+              </h3>
+              <button onClick={() => setSettleExpenseItem(null)} className="text-gray-400 hover:text-gray-700">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="bg-orange-50/70 p-3 rounded-lg border border-orange-100 mb-4 text-xs space-y-1">
+              <p className="font-bold text-gray-800 text-sm">{settleExpenseItem.title}</p>
+              <div className="flex justify-between text-gray-600 pt-1">
+                <span>{lang === 'mr' ? 'एकूण बिल:' : 'Total Bill:'}</span>
+                <span className="font-bold">{formatCurrency(settleExpenseItem.totalAmount || ((settleExpenseItem.advanceAmount ?? settleExpenseItem.amount) + (settleExpenseItem.remainingAmount ?? 0)))}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>{lang === 'mr' ? 'आतापर्यंत दिलेले:' : 'Paid so far:'}</span>
+                <span className="font-bold text-green-700">{formatCurrency(settleExpenseItem.advanceAmount ?? settleExpenseItem.amount)}</span>
+              </div>
+              <div className="flex justify-between text-red-600 font-bold border-t border-orange-200/60 pt-1">
+                <span>{lang === 'mr' ? 'देणे बाकी शिल्लक:' : 'Remaining Due:'}</span>
+                <span>{formatCurrency(settleExpenseItem.remainingAmount || 0)}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmSettleExpense} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                  {lang === 'mr' ? 'आता भरायची रक्कम (₹) *' : 'Amount paying now (₹) *'}
+                </label>
+                <input 
+                  required 
+                  type="number" 
+                  min="1" 
+                  max={settleExpenseItem.remainingAmount || 999999}
+                  value={settleAmount} 
+                  onChange={e => setSettleAmount(e.target.value)} 
+                  className="w-full border-2 border-[#800000] rounded-lg p-2.5 text-base font-black text-[#800000] outline-none"
+                  placeholder="Enter amount"
+                />
+                <p className="text-[10px] text-gray-500 mt-1">
+                  {lang === 'mr' ? 'तुम्ही पूर्ण किंवा अंशतः (हप्ता) रक्कम भरू शकता.' : 'You can pay the full remaining due or a partial amount.'}
+                </p>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setSettleExpenseItem(null)} 
+                  className="flex-1 py-2.5 border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 transition"
+                >
+                  {t('cancel', lang)}
+                </button>
+                <button 
+                  type="submit" 
+                  className="flex-1 py-2.5 bg-[#800000] text-white rounded-lg text-xs font-bold hover:bg-red-900 transition shadow-md flex items-center justify-center gap-1.5"
+                >
+                  <Check size={16} />
+                  {lang === 'mr' ? 'पेमेंट नोंदवा' : 'Confirm Payment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Custom Delete Confirmation Modal */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
@@ -200,7 +334,23 @@ function HomeView({ navigateTo, lang }: { navigateTo: (v: View) => void, lang: L
   );
 }
 
-function EntriesView({ varganis, expenses, onDelete, onViewReceipt, lang }: { varganis: Vargani[], expenses: Expense[], onDelete: (type: 'vargani'|'expense', id: string)=>void, onViewReceipt: (v: Vargani)=>void, lang: Lang }) {
+function EntriesView({ 
+  varganis, 
+  expenses, 
+  onDelete, 
+  onViewReceipt, 
+  onMarkVarganiReceived,
+  onOpenSettleExpense,
+  lang 
+}: { 
+  varganis: Vargani[], 
+  expenses: Expense[], 
+  onDelete: (type: 'vargani'|'expense', id: string)=>void, 
+  onViewReceipt: (v: Vargani)=>void, 
+  onMarkVarganiReceived: (id: string) => void,
+  onOpenSettleExpense: (e: Expense) => void,
+  lang: Lang 
+}) {
   const tabs = ['All', 'Income', 'Expenses', 'Goods', 'Pending'] as const;
   const tabKeys = { All: 'all', Income: 'income', Expenses: 'expenses', Goods: 'goods', Pending: 'pending' } as const;
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>('All');
@@ -215,7 +365,10 @@ function EntriesView({ varganis, expenses, onDelete, onViewReceipt, lang }: { va
   else if (activeTab === 'Income') displayItems = allItems.filter(i => i._type === 'vargani' && !i.isGoods && !i.isPending);
   else if (activeTab === 'Expenses') displayItems = allItems.filter(i => i._type === 'expense');
   else if (activeTab === 'Goods') displayItems = allItems.filter(i => i._type === 'vargani' && i.isGoods);
-  else if (activeTab === 'Pending') displayItems = allItems.filter(i => i._type === 'vargani' && i.isPending);
+  else if (activeTab === 'Pending') displayItems = allItems.filter(i => (i._type === 'vargani' && i.isPending) || (i._type === 'expense' && ((i as Expense).remainingAmount ?? 0) > 0));
+
+  const totalPendingReceivable = varganis.filter(v => v.isPending).reduce((sum, v) => sum + v.amount, 0);
+  const totalPendingPayable = expenses.reduce((sum, e) => sum + (e.remainingAmount || 0), 0);
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
@@ -224,37 +377,149 @@ function EntriesView({ varganis, expenses, onDelete, onViewReceipt, lang }: { va
           {tabs.map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap transition-colors border ${activeTab === tab ? 'bg-[#800000] text-white border-[#800000]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
               {t(tabKeys[tab], lang)}
+              {tab === 'Pending' && (varganis.some(v => v.isPending) || expenses.some(e => (e.remainingAmount || 0) > 0)) && (
+                <span className="ml-1.5 bg-red-500 text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold">
+                  {varganis.filter(v => v.isPending).length + expenses.filter(e => (e.remainingAmount || 0) > 0).length}
+                </span>
+              )}
             </button>
           ))}
        </div>
+
+       {/* Pending Banner summary when in Pending tab */}
+       {activeTab === 'Pending' && (totalPendingPayable > 0 || totalPendingReceivable > 0) && (
+         <div className="grid grid-cols-2 gap-2 p-3 pb-0">
+           <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 text-center">
+             <p className="text-[10px] font-bold text-red-700 uppercase">{t('pendingPayable', lang)} (खर्च)</p>
+             <p className="text-sm font-black text-red-600">{formatCurrency(totalPendingPayable)}</p>
+           </div>
+           <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-center">
+             <p className="text-[10px] font-bold text-amber-800 uppercase">{t('pendingReceivable', lang)} (वर्गणी)</p>
+             <p className="text-sm font-black text-amber-700">{formatCurrency(totalPendingReceivable)}</p>
+           </div>
+         </div>
+       )}
+
        {/* List */}
-       <div className="flex-1 overflow-y-auto p-3 space-y-2">
+       <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
          {displayItems.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-40 opacity-50">
+            <div className="flex flex-col items-center justify-center h-48 opacity-50">
                <List size={40} className="mb-2 text-gray-400" />
                <p className="text-center text-gray-500 text-xs">{t('noEntries', lang)}</p>
             </div>
          )}
-         {displayItems.map(item => (
-           <div key={item.id} onClick={() => item._type === 'vargani' && onViewReceipt(item as any)} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center cursor-pointer hover:border-[#FF9933] transition">
-              <div className="flex-1">
-                <p className="text-xs font-bold text-gray-800">{item._type === 'vargani' ? (item as Vargani).donorName : (item as Expense).title}</p>
-                <p className="text-[10px] text-gray-500 mt-0.5">
-                  {item.date} • {item._type === 'vargani' ? `MB ${((item as Vargani).receiptNo || '').split('-').pop()}` : (item as Expense).category} 
-                  {(item as Vargani).isGoods && <span className="ml-1 text-[#FF9933] font-bold bg-orange-50 px-1 py-0.5 rounded">{t('goods', lang)}</span>}
-                  {(item as Vargani).isPending && <span className="ml-1 text-red-500 font-bold bg-red-50 px-1 py-0.5 rounded">{t('pending', lang)}</span>}
-                </p>
+         {displayItems.map(item => {
+           const isVargani = item._type === 'vargani';
+           const varganiItem = isVargani ? (item as Vargani) : null;
+           const expenseItem = !isVargani ? (item as Expense) : null;
+           const hasExpenseRemaining = expenseItem && (expenseItem.remainingAmount || 0) > 0;
+           const isPendingVargani = varganiItem && varganiItem.isPending;
+
+           return (
+            <div 
+              key={item.id} 
+              onClick={() => isVargani && onViewReceipt(varganiItem!)} 
+              className={`bg-white p-3.5 rounded-xl border shadow-sm flex flex-col gap-2 transition ${
+                isVargani ? 'cursor-pointer hover:border-[#FF9933] border-gray-200' : 'border-gray-200'
+              } ${hasExpenseRemaining || isPendingVargani ? 'border-amber-200 bg-amber-50/20' : ''}`}
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex-1 pr-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-xs font-bold text-gray-900">
+                      {isVargani ? varganiItem!.donorName : expenseItem!.title}
+                    </p>
+                    {isVargani && varganiItem!.isGoods && (
+                      <span className="text-[#FF9933] font-bold bg-orange-50 border border-orange-200 text-[9px] px-1.5 py-0.5 rounded">
+                        {t('goods', lang)}
+                      </span>
+                    )}
+                    {isPendingVargani && (
+                      <span className="text-amber-800 font-bold bg-amber-100 border border-amber-300 text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <AlertCircle size={10} />
+                        {lang === 'mr' ? 'वर्गणी बाकी' : 'Donation Pending'}
+                      </span>
+                    )}
+                    {hasExpenseRemaining && (
+                      <span className="text-red-700 font-bold bg-red-100 border border-red-300 text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <AlertCircle size={10} />
+                        {lang === 'mr' ? `बाकी: ₹${toMarathiDigits(expenseItem!.remainingAmount!)}` : `Due: ₹${expenseItem!.remainingAmount}`}
+                      </span>
+                    )}
+                  </div>
+                  
+                  <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1 flex-wrap">
+                    <span>{item.date}</span>
+                    <span>•</span>
+                    <span>{isVargani ? `MB ${((varganiItem!.receiptNo || '').split('-').pop())}` : expenseItem!.category}</span>
+                    {expenseItem && expenseItem.notes && (
+                      <>
+                        <span>•</span>
+                        <span className="italic text-gray-400 max-w-[120px] truncate">{expenseItem.notes}</span>
+                      </>
+                    )}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="text-right">
+                    <span className={`text-sm font-black tracking-tight ${isVargani ? 'text-green-600' : 'text-red-600'}`}>
+                      {isVargani ? '+' : '-'}{formatCurrency(item.amount)}
+                    </span>
+                    {!isVargani && hasExpenseRemaining && (
+                      <p className="text-[9px] font-bold text-gray-400">
+                        {lang === 'mr' ? 'एकूण' : 'Total'} {formatCurrency(expenseItem!.totalAmount || (expenseItem!.amount + (expenseItem!.remainingAmount || 0)))}
+                      </p>
+                    )}
+                  </div>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onDelete(item._type, item.id); }} 
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition"
+                  >
+                     <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-3 ml-2">
-                <span className={`text-sm font-black tracking-tight ${item._type === 'vargani' ? 'text-green-600' : 'text-red-600'}`}>
-                  {item._type === 'vargani' ? '+' : '-'}{formatCurrency(item.amount)}
-                </span>
-                <button onClick={(e) => { e.stopPropagation(); onDelete(item._type, item.id); }} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition">
-                   <Trash2 size={16} />
-                </button>
-              </div>
-           </div>
-         ))}
+
+              {/* Quick Action bar for Pending items in list */}
+              {(isPendingVargani || hasExpenseRemaining) && (
+                <div className="pt-2 border-t border-gray-100 flex items-center justify-between mt-1 text-xs">
+                  {isPendingVargani && (
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-[10px] text-amber-800 font-medium">
+                        {lang === 'mr' ? 'स्वयंसेवक:' : 'Volunteer:'} <strong className="text-gray-700">{varganiItem!.volunteerName}</strong>
+                      </span>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); onMarkVarganiReceived(varganiItem!.id); }}
+                        className="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-[10px] font-bold flex items-center gap-1 shadow-sm transition"
+                      >
+                        <CheckCircle size={12} />
+                        {t('markReceived', lang)}
+                      </button>
+                    </div>
+                  )}
+
+                  {hasExpenseRemaining && (
+                    <div className="flex items-center justify-between w-full bg-red-50/70 p-2 rounded border border-red-100">
+                      <div className="text-[10px]">
+                        <span className="text-gray-600">{lang === 'mr' ? 'दिले:' : 'Paid:'} <strong>{formatCurrency(expenseItem!.advanceAmount ?? expenseItem!.amount)}</strong></span>
+                        <span className="mx-1 text-gray-400">|</span>
+                        <span className="text-red-700 font-bold">{lang === 'mr' ? 'बाकी:' : 'Due:'} <strong>{formatCurrency(expenseItem!.remainingAmount!)}</strong></span>
+                      </div>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); onOpenSettleExpense(expenseItem!); }}
+                        className="bg-[#800000] hover:bg-red-900 text-white px-2.5 py-1 rounded text-[10px] font-bold flex items-center gap-1 shadow-sm transition"
+                      >
+                        <CreditCard size={12} />
+                        {t('settleDue', lang)}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+           );
+         })}
        </div>
     </div>
   )
@@ -262,8 +527,12 @@ function EntriesView({ varganis, expenses, onDelete, onViewReceipt, lang }: { va
 
 function ReportsView({ varganis, expenses, lang }: { varganis: Vargani[], expenses: Expense[], lang: Lang }) {
   const totalCollected = varganis.filter(v => !v.isGoods && !v.isPending).reduce((sum, v) => sum + v.amount, 0);
-  const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalSpent = expenses.reduce((sum, e) => sum + (e.advanceAmount ?? e.amount), 0);
   const inHand = totalCollected - totalSpent;
+
+  const totalPendingExpenses = expenses.reduce((sum, e) => sum + (e.remainingAmount || 0), 0);
+  const totalPendingVarganis = varganis.filter(v => v.isPending).reduce((sum, v) => sum + v.amount, 0);
+  const totalCommittedExpenses = expenses.reduce((sum, e) => sum + (e.totalAmount || ((e.advanceAmount ?? e.amount) + (e.remainingAmount || 0))), 0);
 
   const volunteerTotals = varganis.filter(v => !v.isPending).reduce((acc, v) => {
     acc[v.volunteerName] = (acc[v.volunteerName] || 0) + v.amount;
@@ -279,14 +548,46 @@ function ReportsView({ varganis, expenses, lang }: { varganis: Vargani[], expens
            <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10"></div>
            <p className="text-[10px] opacity-80 mb-1 uppercase tracking-wider">{t('netBalance', lang)}</p>
            <p className="text-4xl font-black">{formatCurrency(inHand)}</p>
+           <p className="text-[10px] opacity-75 mt-1">{lang === 'mr' ? '(जमा व प्रत्यक्ष खर्च वजा जाता शिल्लक)' : '(In-Hand Cash Balance)'}</p>
          </div>
-         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-center">
+
+         <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm text-center">
            <p className="text-[10px] text-green-800 font-bold mb-1 uppercase">{t('totalCollected', lang)}</p>
            <p className="text-lg font-black text-green-600">{formatCurrency(totalCollected)}</p>
          </div>
-         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-center">
+         <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm text-center">
            <p className="text-[10px] text-red-800 font-bold mb-1 uppercase">{t('totalSpent', lang)}</p>
            <p className="text-lg font-black text-red-600">{formatCurrency(totalSpent)}</p>
+         </div>
+
+         <div className="bg-white p-3 rounded-xl border border-red-100 bg-red-50/40 text-center">
+           <p className="text-[10px] text-red-800 font-bold mb-0.5 uppercase">{t('pendingPayable', lang)}</p>
+           <p className="text-base font-black text-red-600">{formatCurrency(totalPendingExpenses)}</p>
+           <p className="text-[8px] text-gray-500">{lang === 'mr' ? 'कंत्राटदारांना द्यायची बाकी' : 'Due to Vendors'}</p>
+         </div>
+         <div className="bg-white p-3 rounded-xl border border-amber-100 bg-amber-50/40 text-center">
+           <p className="text-[10px] text-amber-800 font-bold mb-0.5 uppercase">{t('pendingReceivable', lang)}</p>
+           <p className="text-base font-black text-amber-700">{formatCurrency(totalPendingVarganis)}</p>
+           <p className="text-[8px] text-gray-500">{lang === 'mr' ? 'येणे बाकी देणग्या' : 'Pending Donations'}</p>
+         </div>
+       </div>
+
+       {/* Overall Budget Overview */}
+       <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm text-xs space-y-2">
+         <h3 className="font-bold text-[#800000] border-b pb-1 text-[11px] uppercase tracking-wider">
+           {lang === 'mr' ? 'एकूण हिशोब सारांश' : 'Financial Summary'}
+         </h3>
+         <div className="flex justify-between text-gray-600">
+           <span>{lang === 'mr' ? 'एकूण अंदाजित खर्च (Committed):' : 'Total Budgeted Expense:'}</span>
+           <span className="font-bold text-gray-900">{formatCurrency(totalCommittedExpenses)}</span>
+         </div>
+         <div className="flex justify-between text-gray-600">
+           <span>{lang === 'mr' ? 'प्रत्यक्ष अदा केलेली रक्कम:' : 'Actually Paid Out:'}</span>
+           <span className="font-bold text-red-600">{formatCurrency(totalSpent)}</span>
+         </div>
+         <div className="flex justify-between text-gray-600 border-t pt-1 font-bold">
+           <span>{lang === 'mr' ? 'देणे बाकी रक्कम (Pending Dues):' : 'Pending Dues to Pay:'}</span>
+           <span className="text-red-700">{formatCurrency(totalPendingExpenses)}</span>
          </div>
        </div>
 
@@ -398,47 +699,153 @@ function VarganiForm({ onSave, onCancel, lang }: { onSave: (v: Vargani) => void,
 }
 
 function ExpenseForm({ onSave, onCancel, lang }: { onSave: (e: Expense) => void, onCancel: () => void, lang: Lang }) {
-  const categories = ["Idol", "Mandap & Lighting", "Sound", "Prasad", "Procession", "Other"];
+  const categories = ["Idol", "Mandap & Lighting", "Sound", "Prasad", "Procession", "Decoration", "Other"];
   const translatedCategories: Record<string, string> = {
-    "Idol": "मूर्ती", "Mandap & Lighting": "मंडप आणि रोषणाई", "Sound": "ध्वनी / डीजे", "Prasad": "प्रसाद", "Procession": "मिरवणूक", "Other": "इतर"
+    "Idol": "मूर्ती", 
+    "Mandap & Lighting": "मंडप आणि रोषणाई", 
+    "Sound": "ध्वनी / डीजे", 
+    "Prasad": "प्रसाद", 
+    "Procession": "मिरवणूक", 
+    "Decoration": "सजावट / देखावा",
+    "Other": "इतर"
   };
-  const [formData, setFormData] = useState({ title: '', category: categories[0], amount: '', notes: '' });
+
+  const [formData, setFormData] = useState({ 
+    title: '', 
+    category: categories[0], 
+    advanceAmount: '', 
+    remainingAmount: '', 
+    notes: '' 
+  });
+
+  const advanceNum = Number(formData.advanceAmount || 0);
+  const remainingNum = Number(formData.remainingAmount || 0);
+  const totalCalculated = advanceNum + remainingNum;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title || !formData.amount) return;
+    if (!formData.title || (!formData.advanceAmount && !formData.remainingAmount)) return;
+    
     onSave({
       id: Date.now().toString(),
       date: format(new Date(), 'dd/MM/yyyy'),
-      ...formData,
-      amount: Number(formData.amount)
+      title: formData.title,
+      category: formData.category,
+      amount: advanceNum, // actual amount spent from treasury right now
+      advanceAmount: advanceNum,
+      remainingAmount: remainingNum,
+      totalAmount: totalCalculated,
+      notes: formData.notes
     });
   };
 
   return (
     <div className="p-4">
-      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-        <h2 className="text-sm font-black text-[#800000] uppercase mb-4 border-b pb-2">{t('newExpense', lang)}</h2>
+      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-md">
+        <div className="border-b pb-3 mb-4">
+          <h2 className="text-sm font-black text-[#800000] uppercase">{t('newExpense', lang)}</h2>
+          <p className="text-[10px] text-gray-500 mt-0.5">
+            {lang === 'mr' ? 'आगाऊ दिलेली रक्कम आणि शिल्लक बाकी नोंदवा.' : 'Record advance paid and any pending balance to vendor.'}
+          </p>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-[10px] font-bold block text-gray-600 mb-1">{t('expenseTitle', lang)}</label>
-            <input required type="text" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full border rounded p-2 text-xs outline-none focus:border-[#800000]" placeholder="" />
+            <label className="text-[10px] font-bold block text-gray-700 mb-1">{t('expenseTitle', lang)}</label>
+            <input 
+              required 
+              type="text" 
+              value={formData.title} 
+              onChange={e => setFormData({...formData, title: e.target.value})} 
+              className="w-full border rounded-lg p-2.5 text-xs outline-none focus:border-[#800000]" 
+              placeholder={lang === 'mr' ? 'उदा. मांडव काम, डीजे ॲडव्हान्स, इत्यादी' : 'e.g. Mandap Setup, Sound advance'} 
+            />
           </div>
+
+          <div>
+            <label className="text-[10px] font-bold block text-gray-700 mb-1">{t('category', lang)}</label>
+            <select 
+              value={formData.category} 
+              onChange={e => setFormData({...formData, category: e.target.value})} 
+              className="w-full border rounded-lg p-2 text-xs outline-none focus:border-[#800000] bg-gray-50"
+            >
+              {categories.map(c => <option key={c} value={c}>{lang === 'mr' ? translatedCategories[c] : c}</option>)}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] font-bold block text-gray-600 mb-1">{t('category', lang)}</label>
-              <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full border rounded p-2 text-xs outline-none focus:border-[#800000]">
-                {categories.map(c => <option key={c} value={c}>{lang === 'mr' ? translatedCategories[c] : c}</option>)}
-              </select>
+              <label className="text-[10px] font-bold block text-[#800000] mb-1">
+                {t('advanceAmount', lang)}
+              </label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-2 text-gray-400 font-bold text-xs">₹</span>
+                <input 
+                  required 
+                  type="number" 
+                  min="0" 
+                  value={formData.advanceAmount} 
+                  onChange={e => setFormData({...formData, advanceAmount: e.target.value})} 
+                  className="w-full border-2 border-red-200 focus:border-[#800000] rounded-lg p-2 pl-6 text-xs font-black text-red-600 outline-none" 
+                  placeholder="2000" 
+                />
+              </div>
+              <p className="text-[9px] text-gray-400 mt-0.5">{lang === 'mr' ? 'आता रोख दिलेली रक्कम' : 'Cash paid now'}</p>
             </div>
+
             <div>
-              <label className="text-[10px] font-bold block text-gray-600 mb-1">{t('amount', lang)}</label>
-              <input required type="number" min="1" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className="w-full border rounded p-2 text-xs font-bold text-red-600 outline-none focus:border-[#800000]" placeholder="5000" />
+              <label className="text-[10px] font-bold block text-amber-800 mb-1">
+                {t('remainingAmount', lang)}
+              </label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-2 text-gray-400 font-bold text-xs">₹</span>
+                <input 
+                  type="number" 
+                  min="0" 
+                  value={formData.remainingAmount} 
+                  onChange={e => setFormData({...formData, remainingAmount: e.target.value})} 
+                  className="w-full border-2 border-amber-200 focus:border-amber-500 rounded-lg p-2 pl-6 text-xs font-black text-amber-800 outline-none" 
+                  placeholder="5000" 
+                />
+              </div>
+              <p className="text-[9px] text-gray-400 mt-0.5">{lang === 'mr' ? 'नंतर द्यायची बाकी (Pending)' : 'Remaining to pay'}</p>
             </div>
           </div>
+
+          {/* Real-time Calculation Summary Badge */}
+          {(advanceNum > 0 || remainingNum > 0) && (
+            <div className={`p-3 rounded-lg border text-xs ${remainingNum > 0 ? 'bg-amber-50/80 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+              <div className="flex justify-between items-center font-bold">
+                <span className="text-gray-700">{lang === 'mr' ? 'एकूण ठरलेला खर्च (Total Bill):' : 'Total Expense / Bill:'}</span>
+                <span className="text-sm font-black text-gray-900">{formatCurrency(totalCalculated)}</span>
+              </div>
+              {remainingNum > 0 ? (
+                <div className="mt-1 text-[10px] text-amber-800 flex items-center gap-1 font-medium">
+                  <AlertCircle size={12} className="text-amber-600 flex-shrink-0" />
+                  <span>
+                    {lang === 'mr' 
+                      ? `दिलेले ₹${toMarathiDigits(advanceNum)} आणि बाकी ₹${toMarathiDigits(remainingNum)} हे "प्रलंबित (Pending)" मध्ये दिसेल.` 
+                      : `Paid ₹${advanceNum} and remaining ₹${remainingNum} will be tracked under "Pending".`}
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-1 text-[10px] text-green-700 flex items-center gap-1 font-medium">
+                  <CheckCircle size={12} className="text-green-600 flex-shrink-0" />
+                  <span>{lang === 'mr' ? 'पूर्ण भरणा झाला आहे (No pending balance).' : 'Full payment done.'}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="text-[10px] font-bold block text-gray-600 mb-1">{t('notes', lang)}</label>
-            <input type="text" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className="w-full border rounded p-2 text-xs outline-none focus:border-[#800000]" placeholder="" />
+            <input 
+              type="text" 
+              value={formData.notes} 
+              onChange={e => setFormData({...formData, notes: e.target.value})} 
+              className="w-full border rounded-lg p-2 text-xs outline-none focus:border-[#800000]" 
+              placeholder={lang === 'mr' ? 'उदा. मोबाईल नं, पावती क्र., संपर्क इत्यादी' : 'e.g. Mobile no, bill receipt number'} 
+            />
           </div>
           
           <div className="pt-2 flex gap-2">
