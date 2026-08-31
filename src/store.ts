@@ -1,56 +1,64 @@
 import { Vargani, Expense } from './types';
+import { db } from './lib/firebase';
+import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, runTransaction } from 'firebase/firestore';
 
-const VARGANI_KEY = 'mandalbook_vargani';
-const EXPENSE_KEY = 'mandalbook_expense';
-
-export const getVarganis = (): Vargani[] => {
-  const data = localStorage.getItem(VARGANI_KEY);
-  return data ? JSON.parse(data) : [];
+export const subscribeToVarganis = (callback: (data: Vargani[]) => void) => {
+  return onSnapshot(collection(db, 'varganis'), (snapshot) => {
+    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Vargani));
+    callback(data);
+  });
 };
 
-export const saveVargani = (v: Vargani) => {
-  const data = getVarganis();
-  data.push(v);
-  localStorage.setItem(VARGANI_KEY, JSON.stringify(data));
+export const subscribeToExpenses = (callback: (data: Expense[]) => void) => {
+  return onSnapshot(collection(db, 'expenses'), (snapshot) => {
+    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense));
+    callback(data);
+  });
 };
 
-export const deleteVargani = (id: string) => {
-  const data = getVarganis().filter(v => v.id !== id);
-  localStorage.setItem(VARGANI_KEY, JSON.stringify(data));
+export const saveVargani = async (v: Vargani) => {
+  await setDoc(doc(db, 'varganis', v.id), v);
 };
 
-export const updateVargani = (updated: Vargani) => {
-  const data = getVarganis().map(v => v.id === updated.id ? updated : v);
-  localStorage.setItem(VARGANI_KEY, JSON.stringify(data));
+export const updateVargani = async (v: Vargani) => {
+  await updateDoc(doc(db, 'varganis', v.id), { ...v });
 };
 
-export const getExpenses = (): Expense[] => {
-  const data = localStorage.getItem(EXPENSE_KEY);
-  return data ? JSON.parse(data) : [];
+export const deleteVargani = async (id: string) => {
+  await deleteDoc(doc(db, 'varganis', id));
 };
 
-export const saveExpense = (e: Expense) => {
-  const data = getExpenses();
-  data.push(e);
-  localStorage.setItem(EXPENSE_KEY, JSON.stringify(data));
+export const saveExpense = async (e: Expense) => {
+  await setDoc(doc(db, 'expenses', e.id), e);
 };
 
-export const updateExpense = (updated: Expense) => {
-  const data = getExpenses().map(e => e.id === updated.id ? updated : e);
-  localStorage.setItem(EXPENSE_KEY, JSON.stringify(data));
+export const updateExpense = async (e: Expense) => {
+  await updateDoc(doc(db, 'expenses', e.id), { ...e });
 };
 
-export const deleteExpense = (id: string) => {
-  const data = getExpenses().filter(e => e.id !== id);
-  localStorage.setItem(EXPENSE_KEY, JSON.stringify(data));
+export const deleteExpense = async (id: string) => {
+  await deleteDoc(doc(db, 'expenses', id));
 };
 
-export const getNextReceiptNo = (): string => {
-  const year = new Date().getFullYear();
-  const varganis = getVarganis();
-  const currentYearVarganis = varganis.filter(v => v.receiptNo.startsWith(`MB-1-`));
-  const count = currentYearVarganis.length + 1;
-  return `MB-1-${count.toString().padStart(4, '0')}`;
+export const getNextReceiptNo = async (): Promise<string> => {
+  const counterRef = doc(db, 'metadata', 'counter');
+  let newNo = 1;
+  try {
+    await runTransaction(db, async (transaction) => {
+      const sfDoc = await transaction.get(counterRef);
+      if (!sfDoc.exists()) {
+        transaction.set(counterRef, { receiptNo: 1 });
+        newNo = 1;
+      } else {
+        newNo = sfDoc.data().receiptNo + 1;
+        transaction.update(counterRef, { receiptNo: newNo });
+      }
+    });
+  } catch (e) {
+    console.error("Transaction failed: ", e);
+    newNo = Math.floor(Math.random() * 10000);
+  }
+  return `MB-1-${newNo.toString().padStart(4, '0')}`;
 };
 
 const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
@@ -59,7 +67,6 @@ const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", 
 
 export function numberToEnglishWords(num: number): string {
     if (num === 0) return "Zero";
-    
     let result = "";
     if (num >= 10000000) {
         result += numberToEnglishWords(Math.floor(num / 10000000)) + " Crore ";
@@ -106,7 +113,6 @@ const marathiNumbers = [
 export function numberToMarathiWords(num: number): string {
     if (num === 0) return "शून्य";
     if (num <= 100) return marathiNumbers[num];
-    
     let result = "";
     if (num >= 10000000) {
         result += numberToMarathiWords(Math.floor(num / 10000000)) + " कोटी ";

@@ -1,0 +1,69 @@
+{
+  "projectInfo": {
+    "name": "Shivjyot Mandal",
+    "description": "Vargani and Expense tracking app for a local Mandal"
+  },
+  "collections": [
+    {
+      "name": "varganis",
+      "description": "Donations (Vargani) collected from devotees",
+      "documentId": "Auto-generated",
+      "fields": [
+        { "name": "titlePrefix", "type": "string", "description": "Shri, Shrimati, etc." },
+        { "name": "donorName", "type": "string", "description": "Name of donor" },
+        { "name": "mobile", "type": "string", "description": "Mobile number" },
+        { "name": "address", "type": "string", "description": "Address of donor" },
+        { "name": "amount", "type": "number", "description": "Donation amount" },
+        { "name": "paymentMode", "type": "string", "description": "Cash, UPI, Cheque" },
+        { "name": "volunteerName", "type": "string", "description": "Volunteer who collected" },
+        { "name": "isGoods", "type": "boolean", "description": "If donation is goods rather than cash" },
+        { "name": "isPending", "type": "boolean", "description": "If payment is pending" },
+        { "name": "date", "type": "string", "description": "Date of receipt" },
+        { "name": "receiptNo", "type": "string", "description": "Receipt number like SM-001" },
+        { "name": "_type", "type": "string", "description": "Always 'vargani'" }
+      ],
+      "access": {
+        "read": "request.auth != null",
+        "create": "request.auth != null",
+        "update": "request.auth != null",
+        "delete": "request.auth != null"
+      }
+    },
+    {
+      "name": "expenses",
+      "description": "Expenses incurred by the Mandal",
+      "documentId": "Auto-generated",
+      "fields": [
+        { "name": "title", "type": "string", "description": "Expense title" },
+        { "name": "category", "type": "string", "description": "Category of expense" },
+        { "name": "amount", "type": "number", "description": "Paid amount" },
+        { "name": "advanceAmount", "type": "number", "description": "Advance paid" },
+        { "name": "remainingAmount", "type": "number", "description": "Remaining to pay" },
+        { "name": "totalAmount", "type": "number", "description": "Total bill amount" },
+        { "name": "notes", "type": "string", "description": "Additional notes" },
+        { "name": "date", "type": "string", "description": "Date of expense" },
+        { "name": "_type", "type": "string", "description": "Always 'expense'" }
+      ],
+      "access": {
+        "read": "request.auth != null",
+        "create": "request.auth != null",
+        "update": "request.auth != null",
+        "delete": "request.auth != null"
+      }
+    },
+    {
+      "name": "metadata",
+      "description": "App metadata like receipt counter",
+      "documentId": "Explicitly named (e.g., 'counter')",
+      "fields": [
+        { "name": "receiptNo", "type": "number", "description": "Current highest receipt number integer" }
+      ],
+      "access": {
+        "read": "request.auth != null",
+        "create": "request.auth != null",
+        "update": "request.auth != null",
+        "delete": "request.auth != null"
+      }
+    }
+  ]
+}

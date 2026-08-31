@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { PlusCircle, MinusCircle, Download, Share2, ArrowLeft, Home, List, PieChart, Trash2, X, Check, Globe, AlertCircle, CheckCircle, CreditCard, LogOut } from 'lucide-react';
-import { getVarganis, getExpenses, saveVargani, saveExpense, updateVargani, updateExpense, deleteVargani, deleteExpense, getNextReceiptNo, formatCurrency, numberToEnglishWords, numberToMarathiWords, toMarathiDigits } from './store';
+import { subscribeToVarganis, subscribeToExpenses, saveVargani, saveExpense, updateVargani, updateExpense, deleteVargani, deleteExpense, getNextReceiptNo, formatCurrency, numberToEnglishWords, numberToMarathiWords, toMarathiDigits } from './store';
+import { signInAnonymously } from 'firebase/auth';
+import { auth } from './lib/firebase';
 import { Vargani, Expense } from './types';
 import { format } from 'date-fns';
 import { toBlob, toPng } from 'html-to-image';
@@ -71,6 +73,7 @@ const t = (key: keyof typeof translations, lang: Lang) => translations[key][lang
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => sessionStorage.getItem('mandal_auth') === 'true');
+  useEffect(() => { if (isAuthenticated && !auth.currentUser) { signInAnonymously(auth).catch(console.error); } }, [isAuthenticated]);
   const [currentView, setCurrentView] = useState<View>('home');
   const [varganis, setVarganis] = useState<Vargani[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -80,13 +83,24 @@ export default function App() {
   // Custom Delete Modal State
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'vargani' | 'expense', id: string } | null>(null);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const unsubV = subscribeToVarganis(setVarganis);
+    const unsubE = subscribeToExpenses(setExpenses);
+    return () => {
+      unsubV();
+      unsubE();
+    };
+  }, [isAuthenticated]);
+
+
   // Settlement Modal State for Pending Expense
   const [settleExpenseItem, setSettleExpenseItem] = useState<Expense | null>(null);
   const [settleAmount, setSettleAmount] = useState<string>('');
 
   useEffect(() => {
-    setVarganis(getVarganis());
-    setExpenses(getExpenses());
+    
+    
   }, []);
 
   const navigateTo = (view: View) => setCurrentView(view);
@@ -95,10 +109,10 @@ export default function App() {
     if (!deleteConfirm) return;
     if (deleteConfirm.type === 'vargani') {
       deleteVargani(deleteConfirm.id);
-      setVarganis(getVarganis());
+      
     } else {
       deleteExpense(deleteConfirm.id);
-      setExpenses(getExpenses());
+      
     }
     setDeleteConfirm(null);
   };
@@ -108,7 +122,7 @@ export default function App() {
     if (!v) return;
     const updated = { ...v, isPending: false };
     updateVargani(updated);
-    setVarganis(getVarganis());
+    
   };
 
   const handleOpenSettleExpense = (exp: Expense) => {
@@ -137,7 +151,7 @@ export default function App() {
     };
 
     updateExpense(updated);
-    setExpenses(getExpenses());
+    
     setSettleExpenseItem(null);
     setSettleAmount('');
   };
@@ -153,11 +167,11 @@ export default function App() {
   };
 
   if (!isAuthenticated) {
-    return <LoginView onLogin={() => { setIsAuthenticated(true); sessionStorage.setItem('mandal_auth', 'true'); }} lang={lang} setLang={handleSetLang} />;
+    return <LoginView onLogin={async () => { await signInAnonymously(auth); setIsAuthenticated(true); sessionStorage.setItem('mandal_auth', 'true'); }} lang={lang} setLang={handleSetLang} />;
   }
 
   return (
-    <div className="flex flex-col h-screen w-full bg-[#FAF9F6] font-sans text-[#1A1A1A] overflow-hidden relative">
+    <div className="flex flex-col h-[100dvh] w-full bg-[#FAF9F6] font-sans text-[#1A1A1A] overflow-hidden relative">
       {/* Global Header */}
       <header className="bg-[#800000] text-white p-3 flex justify-between items-center shadow-lg border-b-4 border-[#FF9933] flex-none">
         <div className="flex items-center gap-3">
@@ -201,14 +215,14 @@ export default function App() {
           {currentView === 'reports' && <ReportsView varganis={varganis} expenses={expenses} lang={lang} />}
           {currentView === 'vargani_form' && (
             <VarganiForm 
-              onSave={(v) => { saveVargani(v); setVarganis(getVarganis()); setSelectedReceipt(v); navigateTo('receipt'); }}
+              onSave={(v) => { saveVargani(v);  setSelectedReceipt(v); navigateTo('receipt'); }}
               onCancel={() => navigateTo('home')}
               lang={lang}
             />
           )}
           {currentView === 'expense_form' && (
             <ExpenseForm 
-              onSave={(e) => { saveExpense(e); setExpenses(getExpenses()); navigateTo('entries'); }}
+              onSave={(e) => { saveExpense(e);  navigateTo('entries'); }}
               onCancel={() => navigateTo('home')}
               lang={lang}
             />
@@ -220,7 +234,7 @@ export default function App() {
 
         {/* Bottom Navigation */}
         {['home', 'entries', 'reports'].includes(currentView) && (
-          <nav className="flex-none bg-white border-t border-gray-200 flex justify-around p-2 pb-safe shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)] z-20">
+          <nav className="flex-none bg-white border-t border-gray-200 flex justify-around p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)] z-20">
             <button onClick={() => setCurrentView('home')} className={`flex flex-col items-center p-2 transition ${currentView==='home'?'text-[#800000] scale-110':'text-gray-400 hover:text-gray-600'}`}>
               <Home size={22} />
               <span className="text-[10px] font-bold mt-1">{t('homeTitle', lang)}</span>
@@ -645,12 +659,13 @@ function VarganiForm({ onSave, onCancel, lang }: { onSave: (v: Vargani) => void,
     isGoods: false, isPending: false
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.donorName || !formData.amount || !formData.volunteerName) return;
+    const nextNo = await getNextReceiptNo();
     onSave({
       id: Date.now().toString(),
-      receiptNo: getNextReceiptNo(),
+      receiptNo: nextNo,
       date: format(new Date(), 'dd/MM/yyyy'),
       ...formData,
       amount: Number(formData.amount)
@@ -1066,7 +1081,7 @@ function LoginView({ onLogin, lang, setLang }: { onLogin: () => void, lang: Lang
   };
 
   return (
-    <div className="flex flex-col h-screen w-full bg-[#FAF9F6] font-sans text-[#1A1A1A] justify-center items-center relative overflow-hidden">
+    <div className="flex flex-col h-[100dvh] w-full bg-[#FAF9F6] font-sans text-[#1A1A1A] justify-center items-center relative overflow-hidden">
       <div className="absolute top-0 w-full h-40 bg-[#800000] rounded-b-[50px] flex justify-center pt-8 border-b-4 border-[#FF9933] shadow-lg z-0">
         <div className="flex flex-col items-center">
           <div className="bg-[#FF9933] p-1.5 rounded-full mb-1">
