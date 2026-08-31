@@ -1066,17 +1066,30 @@ function ReceiptView({ receipt, onBack, lang }: { receipt: Vargani, onBack: () =
   );
 }
 
-function LoginView({ onLogin, lang, setLang }: { onLogin: () => void, lang: Lang, setLang: (l: Lang) => void }) {
+function LoginView({ onLogin, lang, setLang }: { onLogin: () => Promise<void>, lang: Lang, setLang: (l: Lang) => void }) {
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     if (id.toLowerCase() === 'shivjyot' && password === 'bappa') {
-      onLogin();
+      setLoading(true);
+      try {
+        await onLogin();
+      } catch (err: any) {
+        if (err?.code === 'auth/admin-restricted-operation') {
+          setError(lang === 'mr' ? 'Firebase मधील Anonymous Auth सुरु करा.' : 'Please enable Anonymous Auth in Firebase Console.');
+        } else {
+          setError(lang === 'mr' ? 'लॉगिन अयशस्वी. कृपया पुन्हा प्रयत्न करा.' : 'Login failed. Please try again.');
+        }
+      } finally {
+        setLoading(false);
+      }
     } else {
-      setError(true);
+      setError(lang === 'mr' ? 'चुकीचा आयडी किंवा पासवर्ड' : 'Invalid ID or Password');
     }
   };
 
@@ -1096,9 +1109,11 @@ function LoginView({ onLogin, lang, setLang }: { onLogin: () => void, lang: Lang
         <p className="text-center text-xs text-gray-500 mb-6">{t('mandalName', lang)}</p>
 
         {error && (
-          <div className="bg-red-50 text-red-600 text-[11px] p-2.5 rounded-lg mb-4 text-center font-bold flex items-center justify-center gap-1.5 border border-red-200">
-            <AlertCircle size={14} />
-            {t('loginErr', lang)}
+          <div className="bg-red-50 text-red-600 text-[11px] p-2.5 rounded-lg mb-4 text-center font-bold flex flex-col items-center justify-center gap-1.5 border border-red-200">
+            <div className="flex items-center gap-1.5">
+              <AlertCircle size={14} />
+              {error}
+            </div>
           </div>
         )}
 
@@ -1109,7 +1124,7 @@ function LoginView({ onLogin, lang, setLang }: { onLogin: () => void, lang: Lang
               type="text" 
               required
               value={id} 
-              onChange={e => {setId(e.target.value); setError(false);}} 
+              onChange={e => {setId(e.target.value); setError('');}} 
               className="w-full border-2 border-gray-200 rounded-xl p-3 text-sm outline-none focus:border-[#800000] transition bg-gray-50" 
               placeholder="e.g. shivjyot" 
             />
@@ -1120,16 +1135,17 @@ function LoginView({ onLogin, lang, setLang }: { onLogin: () => void, lang: Lang
               type="password" 
               required
               value={password} 
-              onChange={e => {setPassword(e.target.value); setError(false);}} 
+              onChange={e => {setPassword(e.target.value); setError('');}} 
               className="w-full border-2 border-gray-200 rounded-xl p-3 text-sm outline-none focus:border-[#800000] transition bg-gray-50" 
               placeholder="••••••••" 
             />
           </div>
           <button 
             type="submit" 
-            className="w-full bg-[#800000] text-white py-3 rounded-xl text-sm font-bold hover:bg-red-900 transition shadow-md mt-2 flex items-center justify-center gap-2"
+            disabled={loading}
+            className="w-full bg-[#800000] text-white py-3 rounded-xl text-sm font-bold hover:bg-red-900 transition shadow-md mt-2 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            {t('loginBtn', lang)}
+            {loading ? (lang === 'mr' ? 'प्रतिक्षा करा...' : 'Loading...') : t('loginBtn', lang)}
           </button>
         </form>
 

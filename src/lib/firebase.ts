@@ -3,12 +3,13 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
-  projectId: "neural-access-wnm8c",
-  appId: "1:919129994505:web:7b9e35a3806def0a394fd8",
-  apiKey: "AIzaSyBCW4PqhJcjzMIuX3wWxU88duLhRuhFOXY",
-  authDomain: "neural-access-wnm8c.firebaseapp.com",
-  storageBucket: "neural-access-wnm8c.firebasestorage.app",
-  messagingSenderId: "919129994505",
+  apiKey: "AIzaSyCKLurB1ouMd6Ji-85wSfwrX6geceGwL8s",
+  authDomain: "shivjyot-mandal.firebaseapp.com",
+  projectId: "shivjyot-mandal",
+  storageBucket: "shivjyot-mandal.firebasestorage.app",
+  messagingSenderId: "966143718041",
+  appId: "1:966143718041:web:23a252f7b3faec01c37e08",
+  measurementId: "G-3JVCLRQ3JL"
 };
 
 const app = initializeApp(firebaseConfig);
