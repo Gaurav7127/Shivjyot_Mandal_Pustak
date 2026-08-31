@@ -699,6 +699,11 @@ function VarganiForm({ onSave, onCancel, lang }: { onSave: (v: Vargani) => void,
             <input type="tel" value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} className="w-full border rounded p-2 text-xs outline-none focus:border-[#FF9933]" placeholder="" />
           </div>
           
+          <div className="col-span-2">
+            <label className="block text-[10px] font-bold text-[#800000] mb-1">{t('address', lang)}</label>
+            <input type="text" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full border rounded p-2 text-xs outline-none focus:border-[#FF9933]" placeholder={lang === 'mr' ? 'उदा. रविवार पेठ, सातारा' : 'e.g. Raviwar Peth, Satara'} />
+          </div>
+          
           <div className="col-span-2 flex items-center gap-3 p-2 bg-orange-50 border border-orange-100 rounded mt-1">
              <input type="checkbox" id="isGoods" checked={formData.isGoods} onChange={e => setFormData({...formData, isGoods: e.target.checked})} className="accent-[#FF9933] w-4 h-4" />
              <label htmlFor="isGoods" className="text-[10px] font-bold text-[#800000] leading-none">{t('isGoods', lang)}</label>
@@ -1033,6 +1038,12 @@ function ReceiptView({ receipt, onBack, lang }: { receipt: Vargani, onBack: () =
                 <span className="flex-1 min-w-[150px] border-b-[1.5px] border-[#800000] border-dotted px-2 text-[13px] font-black italic">{receipt.donorName}</span>
                 यांजकडून,
               </p>
+              {receipt.address && (
+                <p className="font-bold leading-relaxed flex flex-wrap items-end gap-1">
+                  पत्ता:
+                  <span className="flex-1 min-w-[150px] border-b-[1.5px] border-[#800000] border-dotted px-2 text-[13px] font-black italic">{receipt.address}</span>
+                </p>
+              )}
               <p className="font-bold leading-relaxed flex flex-wrap items-end gap-1">
                 अक्षरी 
                 <span className="flex-1 min-w-[150px] border-b-[1.5px] border-[#800000] border-dotted px-2 text-sm font-black italic">
