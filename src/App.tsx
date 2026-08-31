@@ -5,6 +5,7 @@ import { Vargani, Expense } from './types';
 import { format } from 'date-fns';
 import { toBlob, toPng } from 'html-to-image';
 import { motion, AnimatePresence } from 'motion/react';
+import ganpatiIcon from './assets/images/ganpati_icon_1788156966730.jpg';
 
 type View = 'home' | 'entries' | 'reports' | 'vargani_form' | 'expense_form' | 'receipt';
 type Lang = 'mr' | 'en';
@@ -993,7 +994,8 @@ function ReceiptView({ receipt, onBack, lang }: { receipt: Vargani, onBack: () =
 
             <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none text-[#800000] text-[150px] font-black">ॐ</div>
 
-            <div className="text-center text-[#800000] mb-5 relative z-10">
+            <div className="text-center text-[#800000] mb-5 relative z-10 flex flex-col items-center">
+              <img src={ganpatiIcon} alt="Ganpati Bappa" className="w-16 h-16 rounded-full border-2 border-[#FF9933] object-cover mb-2 shadow-sm" crossOrigin="anonymous" />
               <p className="text-[12px] font-black tracking-[0.2em] mb-3 opacity-90 flex justify-center items-center gap-2">
                 <span className="text-[#FF9933] text-[14px]">❁</span> ॥ श्री गणेशाय नमः ॥ <span className="text-[#FF9933] text-[14px]">❁</span>
               </p>
