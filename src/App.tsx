@@ -5,7 +5,7 @@ import { Vargani, Expense } from './types';
 import { format } from 'date-fns';
 import { toBlob, toPng } from 'html-to-image';
 import { motion, AnimatePresence } from 'motion/react';
-import ganpatiIcon from './assets/images/ganpati_icon_1788156966730.jpg';
+import ganpatiIcon from './assets/images/ganpati_icon_no_text_1788157701559.jpg';
 
 type View = 'home' | 'entries' | 'reports' | 'vargani_form' | 'expense_form' | 'receipt';
 type Lang = 'mr' | 'en';
