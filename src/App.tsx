@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, MinusCircle, Download, Share2, ArrowLeft, Home, List, PieChart, Trash2, X, Check, Globe, AlertCircle, CheckCircle, CreditCard } from 'lucide-react';
+import { PlusCircle, MinusCircle, Download, Share2, ArrowLeft, Home, List, PieChart, Trash2, X, Check, Globe, AlertCircle, CheckCircle, CreditCard, LogOut } from 'lucide-react';
 import { getVarganis, getExpenses, saveVargani, saveExpense, updateVargani, updateExpense, deleteVargani, deleteExpense, getNextReceiptNo, formatCurrency, numberToEnglishWords, numberToMarathiWords, toMarathiDigits } from './store';
 import { Vargani, Expense } from './types';
 import { format } from 'date-fns';
 import { toBlob, toPng } from 'html-to-image';
+import { motion, AnimatePresence } from 'motion/react';
 
 type View = 'home' | 'entries' | 'reports' | 'vargani_form' | 'expense_form' | 'receipt';
 type Lang = 'mr' | 'en';
@@ -59,16 +60,22 @@ const translations = {
   markReceived: { en: 'Mark Received', mr: 'जमा झाली' },
   paid: { en: 'Paid', mr: 'दिले' },
   remaining: { en: 'Remaining', mr: 'बाकी' },
+  loginTitle: { en: 'Mandal Login', mr: 'मंडळ लॉगिन' },
+  loginId: { en: 'Organization ID', mr: 'संस्थेचा आयडी' },
+  password: { en: 'Password', mr: 'पासवर्ड' },
+  loginBtn: { en: 'Login', mr: 'लॉगिन करा' },
+  loginErr: { en: 'Invalid ID or Password', mr: 'चुकीचा आयडी किंवा पासवर्ड' },
 };
 
 const t = (key: keyof typeof translations, lang: Lang) => translations[key][lang];
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => sessionStorage.getItem('mandal_auth') === 'true');
   const [currentView, setCurrentView] = useState<View>('home');
   const [varganis, setVarganis] = useState<Vargani[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [selectedReceipt, setSelectedReceipt] = useState<Vargani | null>(null);
-  const [lang, setLang] = useState<Lang>('mr');
+  const [lang, setLang] = useState<Lang>('en');
   
   // Custom Delete Modal State
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'vargani' | 'expense', id: string } | null>(null);
@@ -135,6 +142,20 @@ export default function App() {
     setSettleAmount('');
   };
 
+  const handleSetLang = (l: Lang) => {
+    setLang(l);
+    localStorage.setItem('mandal_lang', l);
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('mandal_auth');
+    setIsAuthenticated(false);
+  };
+
+  if (!isAuthenticated) {
+    return <LoginView onLogin={() => { setIsAuthenticated(true); sessionStorage.setItem('mandal_auth', 'true'); }} lang={lang} setLang={handleSetLang} />;
+  }
+
   return (
     <div className="flex flex-col h-screen w-full bg-[#FAF9F6] font-sans text-[#1A1A1A] overflow-hidden relative">
       {/* Global Header */}
@@ -153,11 +174,11 @@ export default function App() {
         </div>
         <div className="flex items-center gap-4">
            <button 
-             onClick={() => setLang(lang === 'mr' ? 'en' : 'mr')}
-             className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full transition text-xs font-bold border border-white/20"
+             onClick={handleLogout}
+             className="flex items-center justify-center bg-white/10 hover:bg-white/20 p-2 rounded-full transition text-xs font-bold border border-white/20"
+             title="Logout"
            >
-             <Globe size={14} />
-             {lang === 'mr' ? 'EN' : 'मराठी'}
+             <LogOut size={16} />
            </button>
         </div>
       </header>
@@ -408,6 +429,7 @@ function EntriesView({
                <p className="text-center text-gray-500 text-xs">{t('noEntries', lang)}</p>
             </div>
          )}
+         <AnimatePresence>
          {displayItems.map(item => {
            const isVargani = item._type === 'vargani';
            const varganiItem = isVargani ? (item as Vargani) : null;
@@ -416,10 +438,14 @@ function EntriesView({
            const isPendingVargani = varganiItem && varganiItem.isPending;
 
            return (
-            <div 
+            <motion.div 
               key={item.id} 
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+              transition={{ duration: 0.2 }}
               onClick={() => isVargani && onViewReceipt(varganiItem!)} 
-              className={`bg-white p-3.5 rounded-xl border shadow-sm flex flex-col gap-2 transition ${
+              className={`bg-white p-3.5 rounded-xl border shadow-sm flex flex-col gap-2 transition-colors ${
                 isVargani ? 'cursor-pointer hover:border-[#FF9933] border-gray-200' : 'border-gray-200'
               } ${hasExpenseRemaining || isPendingVargani ? 'border-amber-200 bg-amber-50/20' : ''}`}
             >
@@ -517,9 +543,10 @@ function EntriesView({
                   )}
                 </div>
               )}
-            </div>
+            </motion.div>
            );
          })}
+         </AnimatePresence>
        </div>
     </div>
   )
@@ -1019,6 +1046,81 @@ function ReceiptView({ receipt, onBack, lang }: { receipt: Vargani, onBack: () =
         <button onClick={shareWhatsApp} disabled={isSharing} className={`flex-1 ${isSharing ? 'bg-gray-400' : 'bg-[#25D366] hover:bg-[#20bd5a]'} text-white py-3 rounded-xl flex items-center justify-center gap-2 transition shadow-lg text-xs font-bold`}>
           <Share2 size={16} /> {isSharing ? 'Preparing...' : 'WhatsApp'}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function LoginView({ onLogin, lang, setLang }: { onLogin: () => void, lang: Lang, setLang: (l: Lang) => void }) {
+  const [id, setId] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (id.toLowerCase() === 'shivjyot' && password === 'bappa') {
+      onLogin();
+    } else {
+      setError(true);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-screen w-full bg-[#FAF9F6] font-sans text-[#1A1A1A] justify-center items-center relative overflow-hidden">
+      <div className="absolute top-0 w-full h-40 bg-[#800000] rounded-b-[50px] flex justify-center pt-8 border-b-4 border-[#FF9933] shadow-lg z-0">
+        <div className="flex flex-col items-center">
+          <div className="bg-[#FF9933] p-1.5 rounded-full mb-1">
+             <div className="w-12 h-12 flex items-center justify-center font-bold text-[#800000] text-3xl">ॐ</div>
+           </div>
+           <p className="text-white text-[10px] tracking-widest opacity-90 uppercase">|| गणपती बाप्पा मोरया ||</p>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-xl border border-gray-200 z-10 w-11/12 max-w-sm mt-20 relative">
+        <h2 className="text-xl font-black text-[#800000] mb-1 text-center">{t('loginTitle', lang)}</h2>
+        <p className="text-center text-xs text-gray-500 mb-6">{t('mandalName', lang)}</p>
+
+        {error && (
+          <div className="bg-red-50 text-red-600 text-[11px] p-2.5 rounded-lg mb-4 text-center font-bold flex items-center justify-center gap-1.5 border border-red-200">
+            <AlertCircle size={14} />
+            {t('loginErr', lang)}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-[10px] font-bold block text-gray-700 mb-1">{t('loginId', lang)}</label>
+            <input 
+              type="text" 
+              required
+              value={id} 
+              onChange={e => {setId(e.target.value); setError(false);}} 
+              className="w-full border-2 border-gray-200 rounded-xl p-3 text-sm outline-none focus:border-[#800000] transition bg-gray-50" 
+              placeholder="e.g. shivjyot" 
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold block text-gray-700 mb-1">{t('password', lang)}</label>
+            <input 
+              type="password" 
+              required
+              value={password} 
+              onChange={e => {setPassword(e.target.value); setError(false);}} 
+              className="w-full border-2 border-gray-200 rounded-xl p-3 text-sm outline-none focus:border-[#800000] transition bg-gray-50" 
+              placeholder="••••••••" 
+            />
+          </div>
+          <button 
+            type="submit" 
+            className="w-full bg-[#800000] text-white py-3 rounded-xl text-sm font-bold hover:bg-red-900 transition shadow-md mt-2 flex items-center justify-center gap-2"
+          >
+            {t('loginBtn', lang)}
+          </button>
+        </form>
+
+        <p className="text-[9px] text-gray-400 text-center mt-6">
+          Authorized personnel only. Not for public access.
+        </p>
       </div>
     </div>
   );
