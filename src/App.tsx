@@ -22,6 +22,7 @@ const translations = {
   all: { en: 'All', mr: 'सर्व' },
   income: { en: 'Income', mr: 'जमा' },
   expenses: { en: 'Expenses', mr: 'खर्च' },
+  members: { en: 'Members', mr: 'सदस्य' },
   goods: { en: 'Goods', mr: 'वस्तू' },
   pending: { en: 'Pending', mr: 'प्रलंबित' },
   noEntries: { en: 'No entries found.', mr: 'कोणतीही नोंद नाही.' },
@@ -101,6 +102,8 @@ export default function App() {
   // Settlement Modal State for Pending Expense
   const [settleExpenseItem, setSettleExpenseItem] = useState<Expense | null>(null);
   const [settleAmount, setSettleAmount] = useState<string>('');
+  const [settlePaidBy, setSettlePaidBy] = useState<string>('');
+  const [settleNotes, setSettleNotes] = useState<string>('');
 
   useEffect(() => {
     
@@ -132,11 +135,13 @@ export default function App() {
   const handleOpenSettleExpense = (exp: Expense) => {
     setSettleExpenseItem(exp);
     setSettleAmount((exp.remainingAmount || 0).toString());
+    setSettlePaidBy('');
+    setSettleNotes('');
   };
 
   const handleConfirmSettleExpense = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!settleExpenseItem) return;
+    if (!settleExpenseItem || !settlePaidBy.trim()) return;
     const pay = Number(settleAmount);
     if (isNaN(pay) || pay <= 0) return;
 
@@ -146,18 +151,31 @@ export default function App() {
     const newRemaining = Math.max(0, currentRemaining - pay);
     const newTotal = settleExpenseItem.totalAmount || (currentAdvance + currentRemaining);
 
+    const newPayment = {
+      id: Date.now().toString(),
+      amount: pay,
+      paidBy: settlePaidBy.trim(),
+      date: new Date().toLocaleDateString('en-GB'),
+      notes: settleNotes.trim() || undefined
+    };
+
+    const existingPayments = settleExpenseItem.payments || [];
+
     const updated: Expense = {
       ...settleExpenseItem,
       amount: newAdvance,
       advanceAmount: newAdvance,
       remainingAmount: newRemaining,
-      totalAmount: newTotal
+      totalAmount: newTotal,
+      payments: [...existingPayments, newPayment]
     };
 
     updateExpense(updated);
     
     setSettleExpenseItem(null);
     setSettleAmount('');
+    setSettlePaidBy('');
+    setSettleNotes('');
   };
 
   const handleSetLang = (l: Lang) => {
@@ -305,6 +323,29 @@ export default function App() {
                 </p>
               </div>
 
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-1">{lang === 'mr' ? 'रक्कम देणाऱ्या सदस्याचे नाव *' : 'Member / Volunteer Name *'}</label>
+                <input 
+                  type="text"
+                  required
+                  value={settlePaidBy}
+                  onChange={e => setSettlePaidBy(e.target.value)}
+                  className="w-full border-2 border-gray-200 rounded-lg p-2.5 text-sm font-bold text-gray-800 outline-none focus:border-[#800000]"
+                  placeholder={lang === 'mr' ? 'उदा. राहुल, सागर, इ.' : 'e.g. Rahul, Sagar, etc.'}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-1">{lang === 'mr' ? 'कशातून दिले (उदा. वर्गणीतून)' : 'Paid From (e.g. Vargani)'}</label>
+                <input 
+                  type="text"
+                  value={settleNotes}
+                  onChange={e => setSettleNotes(e.target.value)}
+                  className="w-full border-2 border-gray-200 rounded-lg p-2.5 text-sm outline-none focus:border-[#800000]"
+                  placeholder={lang === 'mr' ? 'उदा. वर्गणीतून रोख दिले' : 'e.g. Paid in cash from Vargani'}
+                />
+              </div>
+
               <div className="flex gap-2 pt-2">
                 <button 
                   type="button" 
@@ -390,8 +431,8 @@ function EntriesView({
   onOpenSettleExpense: (e: Expense) => void,
   lang: Lang 
 }) {
-  const tabs = ['All', 'Income', 'Expenses', 'Goods', 'Pending'] as const;
-  const tabKeys = { All: 'all', Income: 'income', Expenses: 'expenses', Goods: 'goods', Pending: 'pending' } as const;
+  const tabs = ['All', 'Income', 'Expenses', 'Members', 'Goods', 'Pending'] as const;
+  const tabKeys = { All: 'all', Income: 'income', Expenses: 'expenses', Members: 'members', Goods: 'goods', Pending: 'pending' } as const;
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>('All');
 
   const allItems = [
@@ -403,9 +444,10 @@ function EntriesView({
   if (activeTab === 'All') displayItems = allItems;
   else if (activeTab === 'Income') displayItems = allItems.filter(i => i._type === 'vargani' && !i.isGoods && !i.isPending);
   else if (activeTab === 'Expenses') displayItems = allItems.filter(i => i._type === 'expense');
+  else if (activeTab === 'Members') displayItems = allItems.filter(i => i._type === 'vargani' && (i as Vargani).isMemberVargani);
   else if (activeTab === 'Goods') displayItems = allItems.filter(i => i._type === 'vargani' && i.isGoods);
   else if (activeTab === 'Pending') displayItems = allItems.filter(i => (i._type === 'vargani' && i.isPending) || (i._type === 'expense' && ((i as Expense).remainingAmount ?? 0) > 0));
-
+  
   const totalPendingReceivable = varganis.filter(v => v.isPending).reduce((sum, v) => sum + v.amount, 0);
   const totalPendingPayable = expenses.reduce((sum, e) => sum + (e.remainingAmount || 0), 0);
 
@@ -544,19 +586,48 @@ function EntriesView({
                   )}
 
                   {hasExpenseRemaining && (
-                    <div className="flex items-center justify-between w-full bg-red-50/70 p-2 rounded border border-red-100">
+                    <div className="flex items-center justify-between w-full bg-red-50/80 p-2 rounded-lg border border-red-200">
                       <div className="text-[10px]">
-                        <span className="text-gray-600">{lang === 'mr' ? 'दिले:' : 'Paid:'} <strong>{formatCurrency(expenseItem!.advanceAmount ?? expenseItem!.amount)}</strong></span>
+                        <span className="text-gray-700">{lang === 'mr' ? 'एकूण दिलेले:' : 'Total Paid:'} <strong className="text-green-700">{formatCurrency(expenseItem!.advanceAmount ?? expenseItem!.amount)}</strong></span>
                         <span className="mx-1 text-gray-400">|</span>
-                        <span className="text-red-700 font-bold">{lang === 'mr' ? 'बाकी:' : 'Due:'} <strong>{formatCurrency(expenseItem!.remainingAmount!)}</strong></span>
+                        <span className="text-red-700 font-bold">{lang === 'mr' ? 'बाकी:' : 'Due:'} <strong className="text-red-800">{formatCurrency(expenseItem!.remainingAmount!)}</strong></span>
                       </div>
                       <button 
                         onClick={(e) => { e.stopPropagation(); onOpenSettleExpense(expenseItem!); }}
-                        className="bg-[#800000] hover:bg-red-900 text-white px-2.5 py-1 rounded text-[10px] font-bold flex items-center gap-1 shadow-sm transition"
+                        className="bg-[#800000] hover:bg-red-900 text-white px-2.5 py-1.5 rounded-md text-[10px] font-bold flex items-center gap-1 shadow-sm transition"
                       >
                         <CreditCard size={12} />
                         {t('settleDue', lang)}
                       </button>
+                    </div>
+                  )}
+
+                  {!hasExpenseRemaining && expenseItem && (expenseItem.totalAmount || (expenseItem.payments && expenseItem.payments.length > 0)) && (
+                    <div className="bg-green-50 text-green-800 text-[10px] font-bold p-1.5 rounded border border-green-200 flex items-center gap-1 w-full mt-1">
+                      <CheckCircle size={12} className="text-green-600" />
+                      <span>{lang === 'mr' ? 'पूर्ण रक्कम अदा केली (Fully Settled)' : 'Fully Settled'}</span>
+                    </div>
+                  )}
+
+                  {/* Payment History / Installment Breakdown */}
+                  {expenseItem && expenseItem.payments && expenseItem.payments.length > 0 && (
+                    <div className="mt-2 bg-gray-50 p-2 rounded border border-gray-200 text-[10px] space-y-1 w-full">
+                      <p className="font-bold text-[#800000] flex items-center gap-1 text-[9px] uppercase tracking-wider">
+                        <CreditCard size={10} />
+                        {lang === 'mr' ? 'हप्ते / पेमेंट तपशील (Payment Log):' : 'Installment Breakdown:'}
+                      </p>
+                      <div className="space-y-1 divide-y divide-gray-100">
+                        {expenseItem.payments.map((p, idx) => (
+                          <div key={p.id || idx} className="pt-1 flex justify-between items-center text-gray-700">
+                            <div>
+                              <span className="font-bold text-gray-900">{p.paidBy}</span>
+                              {p.notes && <span className="text-gray-500 italic ml-1">({p.notes})</span>}
+                              <span className="text-gray-400 text-[9px] block">{p.date}</span>
+                            </div>
+                            <span className="font-bold text-green-700">+{formatCurrency(p.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -674,7 +745,7 @@ function VarganiForm({ onSave, onCancel, lang }: { onSave: (v: Vargani) => void,
     titlePrefix: 'Shri' as 'Shri' | 'Shrimati' | 'Kum' | 'Ms',
     donorName: '', mobile: '', address: '', amount: '',
     paymentMode: 'Cash' as 'Cash'|'UPI'|'Cheque', volunteerName: '',
-    isGoods: false, isPending: false
+    isGoods: false, isPending: false, isMemberVargani: false
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -725,6 +796,11 @@ function VarganiForm({ onSave, onCancel, lang }: { onSave: (v: Vargani) => void,
           <div className="col-span-2 flex items-center gap-3 p-2 bg-orange-50 border border-orange-100 rounded mt-1">
              <input type="checkbox" id="isGoods" checked={formData.isGoods} onChange={e => setFormData({...formData, isGoods: e.target.checked})} className="accent-[#FF9933] w-4 h-4" />
              <label htmlFor="isGoods" className="text-[10px] font-bold text-[#800000] leading-none">{t('isGoods', lang)}</label>
+          </div>
+          
+          <div className="col-span-2 flex items-center gap-3 p-2 bg-green-50 border border-green-100 rounded mt-1">
+             <input type="checkbox" id="isMemberVargani" checked={formData.isMemberVargani} onChange={e => setFormData({...formData, isMemberVargani: e.target.checked})} className="accent-green-600 w-4 h-4" />
+             <label htmlFor="isMemberVargani" className="text-[10px] font-bold text-green-800 leading-none">{lang === 'mr' ? 'ही वर्गणी मंडळाच्या सदस्याची आहे का?' : 'Is this donation from a Mandal Member?'}</label>
           </div>
           
           <div className="relative col-span-2 sm:col-span-1">

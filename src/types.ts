@@ -6,11 +6,20 @@ export interface Vargani {
   donorName: string;
   mobile: string;
   address: string;
+  isMemberVargani?: boolean;
   amount: number;
   paymentMode: 'Cash' | 'UPI' | 'Cheque';
   volunteerName: string;
   isGoods?: boolean;
   isPending?: boolean;
+}
+
+export interface ExpensePayment {
+  id: string;
+  amount: number;
+  paidBy: string;
+  date: string;
+  notes?: string;
 }
 
 export interface Expense {
@@ -24,6 +33,7 @@ export interface Expense {
   totalAmount?: number;
   notes: string;
   file?: string;
+  payments?: ExpensePayment[];
 }
 
 export interface DashboardStats {
