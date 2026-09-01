@@ -26,6 +26,10 @@ const translations = {
   pending: { en: 'Pending', mr: 'प्रलंबित' },
   noEntries: { en: 'No entries found.', mr: 'कोणतीही नोंद नाही.' },
   netBalance: { en: 'Net Balance', mr: 'एकूण शिल्लक' },
+  netInHandVargani: { en: 'Net Vargani Collected (In-Hand)', mr: 'एकूण जमा वर्गणी (हस्तगत)' },
+  advanceGiven: { en: 'Advance Given to Vendors', mr: 'कंत्राटदारांना दिलेली आगाऊ रक्कम' },
+  advanceGivenShort: { en: 'Advance Given', mr: 'आगाऊ खर्च (दिलेला)' },
+  balanceAfterAdvance: { en: 'Balance after Advance', mr: 'आगाऊ वजा शिल्लक' },
   totalCollected: { en: 'Total Collected', mr: 'एकूण जमा' },
   totalSpent: { en: 'Total Spent (Paid)', mr: 'एकूण खर्च (दिलेला)' },
   leaderboard: { en: 'Volunteer Leaderboard', mr: 'स्वयंसेवक यादी' },
@@ -567,9 +571,11 @@ function EntriesView({
 }
 
 function ReportsView({ varganis, expenses, lang }: { varganis: Vargani[], expenses: Expense[], lang: Lang }) {
+  // Only calculate Vargani Collected amount for net in-hand
   const totalCollected = varganis.filter(v => !v.isGoods && !v.isPending).reduce((sum, v) => sum + v.amount, 0);
-  const totalSpent = expenses.reduce((sum, e) => sum + (e.advanceAmount ?? e.amount), 0);
-  const inHand = totalCollected - totalSpent;
+  // Dedicated calculation for Advance Given to vendors
+  const totalAdvanceGiven = expenses.reduce((sum, e) => sum + (e.advanceAmount ?? e.amount), 0);
+  const balanceAfterAdvance = totalCollected - totalAdvanceGiven;
 
   const totalPendingExpenses = expenses.reduce((sum, e) => sum + (e.remainingAmount || 0), 0);
   const totalPendingVarganis = varganis.filter(v => v.isPending).reduce((sum, v) => sum + v.amount, 0);
@@ -585,20 +591,24 @@ function ReportsView({ varganis, expenses, lang }: { varganis: Vargani[], expens
   return (
     <div className="p-4 space-y-4 h-full overflow-y-auto bg-gray-50">
        <div className="grid grid-cols-2 gap-3">
-         <div className="col-span-2 bg-[#800000] p-6 rounded-xl border border-red-900 shadow-md text-white text-center relative overflow-hidden">
+         {/* Main Net In-Hand Card - Only Vargani Collected Amount */}
+         <div className="col-span-2 bg-[#800000] p-5 rounded-xl border border-red-900 shadow-md text-white text-center relative overflow-hidden">
            <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10"></div>
-           <p className="text-[10px] opacity-80 mb-1 uppercase tracking-wider">{t('netBalance', lang)}</p>
-           <p className="text-4xl font-black">{formatCurrency(inHand)}</p>
-           <p className="text-[10px] opacity-75 mt-1">{lang === 'mr' ? '(जमा व प्रत्यक्ष खर्च वजा जाता शिल्लक)' : '(In-Hand Cash Balance)'}</p>
+           <p className="text-[10px] opacity-80 mb-1 uppercase tracking-wider">{t('netInHandVargani', lang)}</p>
+           <p className="text-4xl font-black">{formatCurrency(totalCollected)}</p>
+           <p className="text-[10px] opacity-75 mt-1">{lang === 'mr' ? '(एकूण जमा झालेली वर्गणी रक्कम)' : '(Total Vargani Collected in Hand)'}</p>
          </div>
 
-         <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm text-center">
-           <p className="text-[10px] text-green-800 font-bold mb-1 uppercase">{t('totalCollected', lang)}</p>
-           <p className="text-lg font-black text-green-600">{formatCurrency(totalCollected)}</p>
-         </div>
-         <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm text-center">
-           <p className="text-[10px] text-red-800 font-bold mb-1 uppercase">{t('totalSpent', lang)}</p>
-           <p className="text-lg font-black text-red-600">{formatCurrency(totalSpent)}</p>
+         {/* Separate Dedicated Card for Advance Given */}
+         <div className="col-span-2 bg-gradient-to-r from-orange-500 to-amber-600 p-4 rounded-xl border border-orange-600 shadow-sm text-white flex items-center justify-between">
+           <div>
+             <p className="text-[10px] uppercase font-bold opacity-90">{t('advanceGiven', lang)}</p>
+             <p className="text-2xl font-black">{formatCurrency(totalAdvanceGiven)}</p>
+             <p className="text-[9px] opacity-85">{lang === 'mr' ? '(कंत्राटदारांना खर्चासाठी दिलेली आगाऊ रक्कम)' : '(Total Advance Paid for Expenses)'}</p>
+           </div>
+           <div className="bg-white/20 p-2.5 rounded-full">
+             <MinusCircle size={24} className="text-white" />
+           </div>
          </div>
 
          <div className="bg-white p-3 rounded-xl border border-red-100 bg-red-50/40 text-center">
@@ -613,20 +623,28 @@ function ReportsView({ varganis, expenses, lang }: { varganis: Vargani[], expens
          </div>
        </div>
 
-       {/* Overall Budget Overview */}
+       {/* Overall Budget & Cash Breakdown Overview */}
        <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm text-xs space-y-2">
          <h3 className="font-bold text-[#800000] border-b pb-1 text-[11px] uppercase tracking-wider">
-           {lang === 'mr' ? 'एकूण हिशोब सारांश' : 'Financial Summary'}
+           {lang === 'mr' ? 'एकूण हिशोब व रोख सारांश' : 'Financial Summary'}
          </h3>
          <div className="flex justify-between text-gray-600">
-           <span>{lang === 'mr' ? 'एकूण अंदाजित खर्च (Committed):' : 'Total Budgeted Expense:'}</span>
-           <span className="font-bold text-gray-900">{formatCurrency(totalCommittedExpenses)}</span>
+           <span>{lang === 'mr' ? 'एकूण जमा वर्गणी (Vargani Collected):' : 'Total Vargani Collected:'}</span>
+           <span className="font-bold text-green-700">{formatCurrency(totalCollected)}</span>
          </div>
          <div className="flex justify-between text-gray-600">
-           <span>{lang === 'mr' ? 'प्रत्यक्ष अदा केलेली रक्कम:' : 'Actually Paid Out:'}</span>
-           <span className="font-bold text-red-600">{formatCurrency(totalSpent)}</span>
+           <span>{lang === 'mr' ? 'कंत्राटदारांना दिलेली आगाऊ रक्कम:' : 'Advance Paid to Vendors:'}</span>
+           <span className="font-bold text-orange-600">{formatCurrency(totalAdvanceGiven)}</span>
          </div>
-         <div className="flex justify-between text-gray-600 border-t pt-1 font-bold">
+         <div className="flex justify-between text-gray-600 bg-gray-50 p-1.5 rounded">
+           <span>{lang === 'mr' ? 'आगाऊ खर्च वजा जाता शिल्लक रोख:' : 'Cash Left after Advance:'}</span>
+           <span className="font-bold text-gray-900">{formatCurrency(balanceAfterAdvance)}</span>
+         </div>
+         <div className="flex justify-between text-gray-600 border-t pt-1.5">
+           <span>{lang === 'mr' ? 'एकूण अंदाजित खर्च (Total Budgeted):' : 'Total Budgeted Expense:'}</span>
+           <span className="font-bold text-gray-800">{formatCurrency(totalCommittedExpenses)}</span>
+         </div>
+         <div className="flex justify-between text-gray-600 font-bold">
            <span>{lang === 'mr' ? 'देणे बाकी रक्कम (Pending Dues):' : 'Pending Dues to Pay:'}</span>
            <span className="text-red-700">{formatCurrency(totalPendingExpenses)}</span>
          </div>
