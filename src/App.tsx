@@ -156,7 +156,7 @@ export default function App() {
       amount: pay,
       paidBy: settlePaidBy.trim(),
       date: new Date().toLocaleDateString('en-GB'),
-      notes: settleNotes.trim() || undefined
+      notes: settleNotes.trim()
     };
 
     const existingPayments = settleExpenseItem.payments || [];

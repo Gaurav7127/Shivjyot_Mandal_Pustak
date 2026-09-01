@@ -16,12 +16,33 @@ export const subscribeToExpenses = (callback: (data: Expense[]) => void) => {
   });
 };
 
+function sanitizeForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return data
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeForFirestore(item)) as unknown as T;
+  }
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const sanitized: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) {
+        sanitized[key] = sanitizeForFirestore(value);
+      }
+    }
+    return sanitized as T;
+  }
+  return data;
+}
+
 export const saveVargani = async (v: Vargani) => {
-  await setDoc(doc(db, 'varganis', v.id), v);
+  await setDoc(doc(db, 'varganis', v.id), sanitizeForFirestore(v));
 };
 
 export const updateVargani = async (v: Vargani) => {
-  await updateDoc(doc(db, 'varganis', v.id), { ...v });
+  await updateDoc(doc(db, 'varganis', v.id), sanitizeForFirestore({ ...v }));
 };
 
 export const deleteVargani = async (id: string) => {
@@ -29,11 +50,11 @@ export const deleteVargani = async (id: string) => {
 };
 
 export const saveExpense = async (e: Expense) => {
-  await setDoc(doc(db, 'expenses', e.id), e);
+  await setDoc(doc(db, 'expenses', e.id), sanitizeForFirestore(e));
 };
 
 export const updateExpense = async (e: Expense) => {
-  await updateDoc(doc(db, 'expenses', e.id), { ...e });
+  await updateDoc(doc(db, 'expenses', e.id), sanitizeForFirestore({ ...e }));
 };
 
 export const deleteExpense = async (id: string) => {
